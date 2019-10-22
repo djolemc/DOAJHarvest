@@ -1,0 +1,11 @@
+{
+
+  "require" :
+  {
+    "phptricks/database_class" : "dev-master",
+    "stichoza/google-translate-php": "^4.0",
+    "detectlanguage/detectlanguage": "*"
+
+     }
+
+}
