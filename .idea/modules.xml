@@ -3,6 +3,9 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/DOAJHarvest.iml" filepath="$PROJECT_DIR$/.idea/DOAJHarvest.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../DOAJHarvest_new/.idea/DOAJHarvest_new.iml" filepath="$PROJECT_DIR$/../DOAJHarvest_new/.idea/DOAJHarvest_new.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../crossref/.idea/crossref.iml" filepath="$PROJECT_DIR$/../crossref/.idea/crossref.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../oneclick/.idea/oneclick.iml" filepath="$PROJECT_DIR$/../oneclick/.idea/oneclick.iml" />
     </modules>
   </component>
 </project>

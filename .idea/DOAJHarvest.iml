@@ -14,5 +14,8 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="module" module-name="oneclick" />
+    <orderEntry type="module" module-name="crossref" />
+    <orderEntry type="module" module-name="DOAJHarvest_new" />
   </component>
 </module>

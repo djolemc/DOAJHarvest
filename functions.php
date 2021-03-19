@@ -16,8 +16,28 @@ function getJournalData($journal, $data)
 {
     if (isset($journal->bibjson->journal->$data)) {
         return $journal->bibjson->journal->$data;
-    } else return null;
+    } else if ($data =='volume' || $data == 'number') {
+        return 'NN';
+    }
+
+    else return null;
+
+
 }
+
+
+function getLicense($journal) {
+
+   if (isset($journal->bibjson->journal->license[0]->title)) {
+       return $journal->bibjson->journal->license[0]->title;
+   } else  if ($journal->bibjson->journal->license[0]->type) {
+       return $journal->bibjson->journal->license[0]->type;
+   } else return null;
+
+
+}
+
+
 function getIdentifier($journal, $id)
 {
     if (isset($journal->bibjson->identifier)) {
@@ -91,11 +111,11 @@ function getAuthors($journal)
         return $result;
     }
 }
-function createArticleId($pissn = null, $eissn = null, $year = null, $number = null, $start_page = null, $author_first, $db)
+function createArticleId($issn, $year = null, $number = null, $start_page = null, $author_first, $db)
 {
 
     $id = '';
-    $issn = checkIssn($pissn, $eissn);
+  //  $issn = checkIssn($pissn, $eissn);
     $year = getYear($year);
     $number = getNumber($number);
     $page = getPage((int)$start_page);
@@ -148,16 +168,6 @@ function getNumber($number) {
 
 }
 
-//function getNumber($number)
-//{
-//    if (!is_numeric($number)) {
-//        return "NN";
-//    } else {
-//        $number = substr($number, -2);
-//        $number = str_pad($number, 2, '0', STR_PAD_LEFT);
-//        return $number;
-//    }
-//}
 
 
 
@@ -177,47 +187,57 @@ function getPage($start_page)
 function getAuthorFirst($author_first)
 {
 
-    $first_author = $author_first[0][0];
+    if ($author_first) {
+        $first_author = $author_first[0][0];
 
 
-    if ($first_author === null || $first_author == '') {
+        if ($first_author === null || $first_author == '') {
 
-        return "X";
+            return "X";
 
-    } else {
+        } else {
 
-        $first_author = $first_author[0];
-        if (!preg_match('/[^A-Za-z]+/', $first_author)) {
-            return ucfirst($first_author);
-        } else
-            return "Q";
+            $first_author = $first_author[0];
+            if (!preg_match('/[^A-Za-z]+/', $first_author)) {
+                return ucfirst($first_author);
+            } else
+                return "Q";
+        }
     }
-
+    else  return "X";
 
 }
 
 function checkID($id, $db)
 {
-//    $id = $db->fetch("select * from ArticlesTempDOAJ where ArticleID='$id';");
+//    $id = $db->fetch("select * from ArticlesTempDOAJ_test where ArticleID='$id';");
 
-    $db->query("SELECT * FROM ArticlesTempDOAJ where ArticleID=:id");
+    $db->query("SELECT top 1 ArticleID FROM ArticlesTempDOAJ_test where ArticleID=:id");
     $db->bind(':id',$id);
     $id=  $db->single();
     return $id;
 
+}
+
+function checkDoajID($id, $db) {
+    $db->query("SELECT * FROM ArticlesTempDOAJ_test where AttributeID='DID' and ContentValue =:id");
+    $db->bind(':id',$id);
+    $id=  $db->single();
+    return $id;
 
 }
 
-function scan_dir()
+
+function scan_dir($dir)
 {
     $ignored = array('.', '..', '.svn', '.htaccess', 'attachment', 'revision', 'test.json');
     $files = array();
 
 
-    foreach (scandir('data') as $file) {
+    foreach (scandir($dir) as $file) {
 
         if (in_array($file, $ignored)) continue;
-        $files[$file] = filemtime('data' . '/' . $file);
+        $files[$file] = filemtime($dir . '/' . $file);
     }
 
 
@@ -226,12 +246,23 @@ function scan_dir()
     return ($files) ? $files : false;
 }
 
-function insertData($podaci, $authors, $keywords, $articleId, $db, $language,$titleLanguage, $abstractLanguage, $kwdLanguage )
+function insertData($podaci, $authors, $keywords, $articleId, $db, $language,$titleLanguage, $abstractLanguage, $kwdLanguage, $articleLanguage )
 {
 
     foreach ($podaci as $key => $attr) {
+
+        if ($key == 'DNO' && empty($attr) || $key == 'DVO' && empty($attr)) {
+            $attr = 'NN';
+        }
+
+        if ($key == 'TI' && empty($attr) || $key == 'TI' && strlen($attr) < 2) {
+            $attr = 'n/a';
+        }
+
+
+
         if (isset($attr) && strlen($attr) > 0) {
-//            $db->insert("INSERT INTO ArticlesTempDOAJ (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES ('$articleId', '0', '$key', '','0','$attr')");
+//            $db->insert("INSERT INTO ArticlesTempDOAJ_test (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES ('$articleId', '0', '$key', '','0','$attr')");
 
             if ($key=='TI') {
                 $lang=$titleLanguage;
@@ -243,8 +274,9 @@ function insertData($podaci, $authors, $keywords, $articleId, $db, $language,$ti
               //  $lang = "ENG";
             }
 
+            $attr = trim(preg_replace('/\s+/', ' ', $attr));
 
-            $db->query('INSERT INTO ArticlesTempDOAJ (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES (:ArticleID, :position ,:AttributeID, :LanguageID, :GroupIndex, :ContentValue)' );
+            $db->query('INSERT INTO ArticlesTempDOAJ_test (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES (:ArticleID, :position ,:AttributeID, :LanguageID, :GroupIndex, :ContentValue)' );
             $db->bind(':ArticleID',$articleId);
             $db->bind(':position','0');
             $db->bind(':AttributeID',$key);
@@ -258,35 +290,66 @@ function insertData($podaci, $authors, $keywords, $articleId, $db, $language,$ti
     }
 
     $pos = 0;
-    foreach ($authors as $author) {
-        if (isset($author[0]) && strlen($author[0]) > 2) {
-          //  $db->insert("INSERT INTO ArticlesTempDOAJ (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES ('$articleId', '$pos', 'AU', '','0','$author[0]')");
 
-            $db->query('INSERT INTO ArticlesTempDOAJ (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES (:ArticleID, :position ,:AttributeID, :LanguageID, :GroupIndex, :ContentValue)' );
-            $db->bind(':ArticleID',$articleId);
-            $db->bind(':position', $pos);
-            $db->bind(':AttributeID','AU');
-            $db->bind(':LanguageID',$language);
-            $db->bind(':GroupIndex','0');
-            $db->bind(':ContentValue',trim($author[0]));
+    if (!$authors) {
 
-            $db->execute();
+        $db->query('INSERT INTO ArticlesTempDOAJ_test (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES (:ArticleID, :position ,:AttributeID, :LanguageID, :GroupIndex, :ContentValue)');
+        $db->bind(':ArticleID', $articleId);
+        $db->bind(':position', $pos);
+        $db->bind(':AttributeID', 'AU');
+        $db->bind(':LanguageID', $language);
+        $db->bind(':GroupIndex', '0');
+        $db->bind(':ContentValue', 'n/a');
+
+        $db->execute();
+
+    }
+    else {
+
+        foreach ($authors as $author) {
+
+            if (isset($author[0]) && strlen($author[0]) > 2) {
+                //  $db->insert("INSERT INTO ArticlesTempDOAJ_test (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES ('$articleId', '$pos', 'AU', '','0','$author[0]')");
+
+                $db->query('INSERT INTO ArticlesTempDOAJ_test (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES (:ArticleID, :position ,:AttributeID, :LanguageID, :GroupIndex, :ContentValue)');
+                $db->bind(':ArticleID', $articleId);
+                $db->bind(':position', $pos);
+                $db->bind(':AttributeID', 'AU');
+                $db->bind(':LanguageID', $language);
+                $db->bind(':GroupIndex', '0');
+                $db->bind(':ContentValue', trim($author[0]));
+
+                $db->execute();
+            } else if(strlen($author[0]) < 2 ) {
+
+                $db->query('INSERT INTO ArticlesTempDOAJ_test (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES (:ArticleID, :position ,:AttributeID, :LanguageID, :GroupIndex, :ContentValue)');
+                $db->bind(':ArticleID', $articleId);
+                $db->bind(':position', $pos);
+                $db->bind(':AttributeID', 'AU');
+                $db->bind(':LanguageID', $language);
+                $db->bind(':GroupIndex', '0');
+                $db->bind(':ContentValue', 'n/a');
+
+                $db->execute();
+
+            }
+
+            if (isset($author[1]) && $author[1] != '' && strlen($author[1]) > 2) {
+//            $db->insert("INSERT INTO ArticlesTempDOAJ_test (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES ('$articleId', '$pos', 'AF', '','0','$author[1]')");
+                $db->query('INSERT INTO ArticlesTempDOAJ_test (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES (:ArticleID, :position ,:AttributeID, :LanguageID, :GroupIndex, :ContentValue)');
+                $db->bind(':ArticleID', $articleId);
+                $db->bind(':position', $pos);
+                $db->bind(':AttributeID', "AF");
+                $db->bind(':LanguageID', $language);
+                $db->bind(':GroupIndex', "0");
+                $db->bind(':ContentValue', trim($author[1]));
+
+                $db->execute();
+
+            }
+
+            $pos++;
         }
-        if (isset($author[1]) && $author[1] != '') {
-//            $db->insert("INSERT INTO ArticlesTempDOAJ (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES ('$articleId', '$pos', 'AF', '','0','$author[1]')");
-            $db->query('INSERT INTO ArticlesTempDOAJ (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES (:ArticleID, :position ,:AttributeID, :LanguageID, :GroupIndex, :ContentValue)' );
-            $db->bind(':ArticleID',$articleId);
-            $db->bind(':position', $pos);
-            $db->bind(':AttributeID',"AF");
-            $db->bind(':LanguageID',$language);
-            $db->bind(':GroupIndex',"0");
-            $db->bind(':ContentValue',trim($author[1]));
-
-            $db->execute();
-
-        }
-
-        $pos++;
     }
 
     $kwdpos = 0;
@@ -298,8 +361,8 @@ function insertData($podaci, $authors, $keywords, $articleId, $db, $language,$ti
                     $kwdLanguage = "ENG";
                 }
 
-//                $db->insert("INSERT INTO ArticlesTempDOAJ (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES ('$articleId', '$kwdpos', 'KW', '','0','$keyword')");
-                $db->query('INSERT INTO ArticlesTempDOAJ (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES (:ArticleID, :position ,:AttributeID, :LanguageID, :GroupIndex, :ContentValue)' );
+//                $db->insert("INSERT INTO ArticlesTempDOAJ_test (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES ('$articleId', '$kwdpos', 'KW', '','0','$keyword')");
+                $db->query('INSERT INTO ArticlesTempDOAJ_test (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES (:ArticleID, :position ,:AttributeID, :LanguageID, :GroupIndex, :ContentValue)' );
                 $db->bind(':ArticleID',$articleId);
                 $db->bind(':position', $kwdpos);
                 $db->bind(':AttributeID',"KW");
@@ -318,6 +381,30 @@ function insertData($podaci, $authors, $keywords, $articleId, $db, $language,$ti
         }
     }
 
+    $langpos =0;
+    if (isset($articleLanguage)) {
+
+        foreach ($articleLanguage as $lang) {
+
+            $db->query('INSERT INTO ArticlesTempDOAJ_test (ArticleID, Position, AttributeID, LanguageID, GroupIndex, ContentValue) VALUES (:ArticleID, :position ,:AttributeID, :LanguageID, :GroupIndex, :ContentValue)' );
+            $db->bind(':ArticleID',$articleId);
+            $db->bind(':position', $langpos);
+            $db->bind(':AttributeID',"JLA");
+            $db->bind(':LanguageID', $language);
+            $db->bind(':GroupIndex',"0");
+            $db->bind(':ContentValue',trim($lang));
+
+            $db->execute();
+
+            $langpos++;
+
+
+        }
+
+    }
+
+
+
 }
 
 function findISSN($pissn, $eissn, $db)
@@ -326,13 +413,14 @@ function findISSN($pissn, $eissn, $db)
 //    $result = $db->fetch("select * from JournalsDOAJ where pISSN='$pissn' or pISSN='$eissn' or eISSN='$eissn' or eISSN='$pissn';");
 
 
-        $db->query('select * from JournalsDOAJ where pISSN=:pissn or pISSN=:issn or eISSN=:eissn or eISSN=:issn1');
+        $db->query('select * from JournalsDOAJ where pISSN=:pissn or pISSN=:issn or eISSN=:eissn or eISSN=:issn1 and InSeesame =2');
         $db->bind(':pissn', $pissn);
         $db->bind(':eissn', $eissn);
         $db->bind(':issn', $eissn);
         $db->bind(':issn1', $pissn);
 
        $result= $db->resultset();
+
        return $result;
 }
 
